@@ -1,6 +1,6 @@
 name: cleanup
 
-# Deletes old download runs (and their logs/artifacts) so storage stays near zero.
+# Deletes old download releases and runs (with their logs/artifacts) so storage stays near zero.
 on:
   schedule:
     - cron: "17 3 * * *"
@@ -8,11 +8,26 @@ on:
 
 permissions:
   actions: write
+  contents: write
 
 jobs:
   cleanup:
     runs-on: ubuntu-latest
     steps:
+      - name: Delete download releases older than 1 day
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          cutoff="$(date -u -d '1 day ago' +%Y-%m-%dT%H:%M:%SZ)"
+          gh release list --repo "$REPO" --limit 1000 --json tagName,createdAt \
+            --jq ".[] | select(.tagName | startswith(\"dl-\")) | select(.createdAt < \"$cutoff\") | .tagName" |
+          while read -r tag; do
+            echo "deleting release $tag"
+            gh release delete "$tag" --repo "$REPO" --cleanup-tag -y || true
+          done
+
       - name: Delete download runs older than 2 days
         env:
           GH_TOKEN: ${{ github.token }}

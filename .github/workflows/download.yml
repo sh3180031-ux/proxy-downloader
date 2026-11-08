@@ -26,7 +26,7 @@ on:
 run-name: dl-${{ github.event.client_payload.request_id || github.run_id }}
 
 permissions:
-  contents: read
+  contents: write   # needed to publish the file as a release asset
 
 jobs:
   download:
@@ -123,3 +123,34 @@ jobs:
           if-no-files-found: error
           retention-days: 1
           compression-level: 0
+
+      # Release assets are plain links the browser can download directly (no CORS, no unzip, no size issue up to 2GB).
+      - name: Publish as release (direct download link)
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: dl-${{ github.event.client_payload.request_id || github.run_id }}
+        run: |
+          set -euo pipefail
+          mkdir -p rel
+          for f in out/*; do
+            size=$(stat -c %s -- "$f")
+            if [ "$size" -ge 2147483648 ]; then
+              echo "::warning::${f#out/} is 2GB or larger - available only as an artifact on the run page"
+              continue
+            fi
+            base="${f#out/}"; stem="$base"; ext=""
+            if [[ "$base" == *.* ]]; then stem="${base%.*}"; ext=".${base##*.}"; fi
+            # GitHub mangles non-ASCII asset names, so build a safe ASCII name.
+            safe_stem="$(printf '%s' "$stem" | LC_ALL=C sed 's/[^A-Za-z0-9._-]/_/g; s/__*/_/g; s/^[_.-]*//; s/[_.-]*$//')"
+            safe_ext="$(printf '%s' "$ext" | LC_ALL=C sed 's/[^A-Za-z0-9.]//g')"
+            [ "$(printf '%s' "$safe_stem" | tr -cd 'A-Za-z0-9' | wc -c)" -ge 3 ] || safe_stem="download"
+            name="${safe_stem:0:120}${safe_ext}"; i=2
+            while [ -e "rel/$name" ]; do name="${safe_stem:0:120}-$i${safe_ext}"; i=$((i+1)); done
+            ln -- "$f" "rel/$name"
+          done
+          if [ -z "$(ls -A rel)" ]; then echo "nothing to publish"; exit 0; fi
+          ls -la rel
+          gh release create "$TAG" rel/* --repo "$GITHUB_REPOSITORY" --title "$TAG" \
+            --notes "Automatic download. Deleted automatically by the cleanup workflow." \
+            --prerelease --latest=false
