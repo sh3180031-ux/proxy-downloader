@@ -80,6 +80,14 @@ jobs:
           set -euo pipefail
           common=(-fL --retry 5 --retry-delay 3 --retry-all-errors --connect-timeout 30
                   -A "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Safari/537.36")
+          # Google Drive share links -> direct download link (skips the virus-scan page).
+          if printf '%s' "$DL_URL" | grep -qE '^https?://(drive|docs)\.google\.com/'; then
+            id="$(printf '%s' "$DL_URL" | sed -nE 's#.*(/d/|[?&]id=)([A-Za-z0-9_-]+).*#\2#p')"
+            if [ -n "$id" ]; then
+              DL_URL="https://drive.usercontent.google.com/download?id=${id}&export=download&confirm=t"
+              echo "Google Drive file id: $id"
+            fi
+          fi
           # Keep the server's original filename (Content-Disposition, else the URL path).
           if ! curl "${common[@]}" -OJ -- "$DL_URL"; then
             echo "Could not derive a filename, saving as download.bin"
