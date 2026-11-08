@@ -1,0 +1,28 @@
+name: cleanup
+
+# Deletes old download runs (and their logs/artifacts) so storage stays near zero.
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  actions: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete download runs older than 2 days
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          cutoff="$(date -u -d '2 days ago' +%Y-%m-%dT%H:%M:%SZ)"
+          gh api --paginate "repos/$REPO/actions/workflows/download.yml/runs?per_page=100&status=completed" \
+            --jq ".workflow_runs[] | select(.created_at < \"$cutoff\") | .id" |
+          while read -r id; do
+            echo "deleting run $id"
+            gh api -X DELETE "repos/$REPO/actions/runs/$id" || true
+          done

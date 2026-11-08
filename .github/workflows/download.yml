@@ -1,0 +1,117 @@
+name: download
+
+# Triggered by index.html via POST /repos/{owner}/{repo}/dispatches
+#   event_type: "download"
+#   client_payload: { request_id, mode: "video" | "file", url, quality? }
+on:
+  repository_dispatch:
+    types: [download]
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "video / file"
+        required: true
+        default: video
+        type: choice
+        options: [video, file]
+      url:
+        description: "URL to download"
+        required: true
+      quality:
+        description: "best / 1080 / 720 / 480 / audio (video only)"
+        required: false
+        default: best
+
+# The page finds its run by this exact title: "dl-<request_id>"
+run-name: dl-${{ github.event.client_payload.request_id || github.run_id }}
+
+permissions:
+  contents: read
+
+jobs:
+  download:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      # Untrusted input is passed only through env vars, never interpolated into the script.
+      DL_MODE: ${{ github.event.client_payload.mode || inputs.mode }}
+      DL_URL: ${{ github.event.client_payload.url || inputs.url }}
+      DL_QUALITY: ${{ github.event.client_payload.quality || inputs.quality || 'best' }}
+      YT_COOKIES: ${{ secrets.YT_COOKIES }}
+    steps:
+      - name: Validate request
+        run: |
+          set -euo pipefail
+          case "$DL_MODE" in video|file) ;; *) echo "::error::invalid mode: $DL_MODE"; exit 1;; esac
+          case "$DL_URL" in http://*|https://*) ;; *) echo "::error::URL must start with http:// or https://"; exit 1;; esac
+          case "$DL_QUALITY" in best|1080|720|480|audio) ;; *) echo "::error::invalid quality: $DL_QUALITY"; exit 1;; esac
+          mkdir -p out
+
+      - name: Install yt-dlp + ffmpeg
+        if: env.DL_MODE == 'video'
+        run: |
+          set -euo pipefail
+          python3 -m pip install --upgrade --quiet "yt-dlp[default]"
+          command -v ffmpeg >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg; }
+          yt-dlp --version
+
+      - name: Download video (yt-dlp)
+        if: env.DL_MODE == 'video'
+        run: |
+          set -euo pipefail
+          args=(--no-playlist --no-progress --windows-filenames --retries 10 --fragment-retries 10
+                -o "out/%(title).150B [%(id)s].%(ext)s")
+          if [ -n "${YT_COOKIES:-}" ]; then
+            printf '%s\n' "$YT_COOKIES" > "$RUNNER_TEMP/cookies.txt"
+            args+=(--cookies "$RUNNER_TEMP/cookies.txt")
+          fi
+          case "$DL_QUALITY" in
+            best)  args+=(-f "bv*+ba/b" --merge-output-format mp4) ;;
+            audio) args+=(-f "ba/b" -x --audio-format mp3 --audio-quality 0) ;;
+            *)     args+=(-f "bv*[height<=${DL_QUALITY}]+ba/b[height<=${DL_QUALITY}]/b" --merge-output-format mp4) ;;
+          esac
+          yt-dlp "${args[@]}" -- "$DL_URL"
+          rm -f "$RUNNER_TEMP/cookies.txt"
+
+      - name: Download file (curl)
+        if: env.DL_MODE == 'file'
+        working-directory: out
+        run: |
+          set -euo pipefail
+          common=(-fL --retry 5 --retry-delay 3 --retry-all-errors --connect-timeout 30
+                  -A "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Safari/537.36")
+          # Keep the server's original filename (Content-Disposition, else the URL path).
+          if ! curl "${common[@]}" -OJ -- "$DL_URL"; then
+            echo "Could not derive a filename, saving as download.bin"
+            rm -f ./* || true
+            curl "${common[@]}" -o download.bin -- "$DL_URL"
+          fi
+
+      - name: Sanitize filenames and summarize
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(out/*)
+          [ ${#files[@]} -gt 0 ] || { echo "::error::no file was downloaded"; exit 1; }
+          for f in "${files[@]}"; do
+            base="${f#out/}"
+            clean="$(printf '%s' "$base" | tr '\\/:*?"<>|\r\n' '___________')"
+            [ "$clean" = "$base" ] || mv -- "$f" "out/$clean"
+          done
+          {
+            echo "### Downloaded"
+            echo
+            echo '| file | size |'
+            echo '|---|---|'
+            for f in out/*; do echo "| ${f#out/} | $(du -h -- "$f" | cut -f1) |"; done
+          } >> "$GITHUB_STEP_SUMMARY"
+          ls -la out
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: download
+          path: out/
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0

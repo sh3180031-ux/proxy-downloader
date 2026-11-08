@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Proxy Downloader</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/fflate@0.8.3/umd/index.js"></script>
+<style>
+  :root{
+    --bg:#0a0d12; --surface:#12161e; --surface-2:#181e29; --border:#262d3d;
+    --text:#e7eaf0; --muted:#7c8699; --muted-2:#4d5568;
+    --accent:#4f8cff; --accent-dim:#2c4a8a; --amber:#f2a93b; --teal:#34c1a2; --red:#ef5350;
+    --mono:'IBM Plex Mono',ui-monospace,monospace; --sans:'Inter',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(circle at 15% 0%, rgba(79,140,255,0.07), transparent 40%),
+      radial-gradient(circle at 85% 100%, rgba(52,193,162,0.05), transparent 40%),
+      var(--bg);
+    color:var(--text); font-family:var(--sans); min-height:100vh; padding:32px 16px 64px;
+  }
+  .wrap{max-width:640px;margin:0 auto;}
+
+  .brand{display:flex;align-items:center;gap:12px;margin-bottom:6px;}
+  .brand-mark{
+    width:34px;height:34px;border-radius:8px;
+    background:linear-gradient(135deg,var(--accent),var(--teal));
+    display:flex;align-items:center;justify-content:center;
+    font-family:var(--mono);font-weight:700;color:#05070a;font-size:15px;flex-shrink:0;
+  }
+  h1{font-family:var(--mono);font-size:20px;font-weight:600;margin:0;letter-spacing:-0.2px;}
+  .sub{color:var(--muted);font-size:13px;margin:2px 0 0;font-family:var(--mono);}
+  .sub b{color:var(--muted-2);}
+
+  .relay{
+    margin-top:26px;background:var(--surface);border:1px solid var(--border);
+    border-radius:14px;padding:22px 18px 18px;position:relative;overflow:hidden;
+  }
+  .relay-nodes{display:flex;align-items:flex-start;justify-content:space-between;position:relative;}
+  .relay-line{position:absolute;top:15px;left:34px;right:34px;height:2px;background:var(--border);z-index:0;}
+  .relay-line-fill{position:absolute;top:15px;left:34px;right:34px;height:2px;background:var(--accent);z-index:1;transform:scaleX(0);transform-origin:right center;transition:transform .5s ease;}
+  .node{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;width:70px;}
+  .dot{
+    width:30px;height:30px;border-radius:50%;background:var(--surface-2);
+    border:2px solid var(--border);display:flex;align-items:center;justify-content:center;
+    font-family:var(--mono);font-size:12px;color:var(--muted);transition:all .3s ease;
+  }
+  .node.active .dot{border-color:var(--amber);color:var(--amber);box-shadow:0 0 0 4px rgba(242,169,59,0.12);animation:pulse 1.4s infinite;}
+  .node.done .dot{border-color:var(--teal);background:var(--teal);color:#05130f;}
+  .node.error .dot{border-color:var(--red);color:var(--red);box-shadow:0 0 0 4px rgba(239,83,80,0.12);}
+  @keyframes pulse{0%,100%{box-shadow:0 0 0 4px rgba(242,169,59,0.12);}50%{box-shadow:0 0 0 7px rgba(242,169,59,0.05);}}
+  .node-label{font-size:10.5px;color:var(--muted);margin-top:7px;text-align:center;line-height:1.3;font-family:var(--mono);}
+  .node.active .node-label,.node.done .node-label{color:var(--text);}
+
+  .log-line{
+    margin-top:18px;padding:9px 12px;background:#05070a;border:1px solid var(--border);
+    border-radius:8px;font-family:var(--mono);font-size:12px;color:var(--muted);
+    min-height:16px;display:flex;align-items:center;gap:6px;
+  }
+  .log-line .cursor{width:6px;height:12px;background:var(--accent);animation:blink 1s step-end infinite;display:inline-block;}
+  @keyframes blink{50%{opacity:0;}}
+  .log-line.ok{color:var(--teal);}
+  .log-line.err{color:var(--red);}
+  .log-line a{color:var(--accent);}
+
+  .tabs{display:flex;gap:4px;margin-top:22px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:4px;}
+  .tab-btn{
+    flex:1;padding:9px 6px;background:none;border:none;border-radius:7px;color:var(--muted);
+    font-family:var(--mono);font-size:11.5px;cursor:pointer;transition:all .15s ease;white-space:nowrap;
+  }
+  .tab-btn.active{background:var(--surface-2);color:var(--text);}
+  .tab-btn:hover:not(.active){color:var(--text);}
+  .tab-btn svg{display:block;margin:0 auto 4px;stroke:currentColor;}
+  .go-btn svg{vertical-align:-2px;margin-left:6px;}
+  .save-btn svg{vertical-align:-2px;margin-left:5px;}
+
+  .panel{margin-top:14px;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px;}
+  .field{margin-bottom:14px;}
+  .field:last-child{margin-bottom:0;}
+  label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px;font-family:var(--mono);}
+  input[type=text],input[type=password],input[type=url]{
+    width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;
+    padding:10px 12px;color:var(--text);font-family:var(--sans);font-size:13.5px;outline:none;
+    transition:border-color .15s ease;
+  }
+  input:focus{border-color:var(--accent);}
+  input::placeholder{color:var(--muted-2);}
+
+  .quality-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;}
+  .qbtn{
+    padding:9px 4px;background:var(--surface-2);border:1px solid var(--border);border-radius:7px;
+    color:var(--muted);font-family:var(--mono);font-size:11.5px;cursor:pointer;text-align:center;
+  }
+  .qbtn.sel{border-color:var(--accent);color:var(--text);background:rgba(79,140,255,0.1);}
+
+  .go-btn{
+    width:100%;margin-top:16px;padding:12px;border:none;border-radius:9px;
+    background:var(--accent);color:#04070f;font-family:var(--mono);font-weight:600;font-size:13.5px;
+    cursor:pointer;transition:filter .15s ease;
+  }
+  .go-btn:hover{filter:brightness(1.08);}
+  .go-btn:disabled{background:var(--surface-2);color:var(--muted-2);cursor:not-allowed;}
+
+  .hint{font-size:11.5px;color:var(--muted-2);margin-top:8px;line-height:1.5;}
+  .info-card{
+    margin-top:10px;padding:10px 12px;background:var(--surface-2);border:1px solid var(--border);
+    border-radius:8px;font-family:var(--mono);font-size:11.5px;color:var(--muted);display:none;
+  }
+  .info-card.show{display:block;}
+  .info-card .row{display:flex;justify-content:space-between;padding:2px 0;}
+  .info-card .row b{color:var(--text);font-weight:500;}
+  .info-card.loading{color:var(--muted-2);}
+  .info-card.error{color:var(--red);}
+  .save-btn{
+    margin-top:16px;padding:10px 16px;border:1px solid var(--border);border-radius:8px;
+    background:var(--surface-2);color:var(--text);font-family:var(--mono);font-size:12.5px;cursor:pointer;
+  }
+  .save-btn:hover{border-color:var(--accent);}
+  .status-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--muted-2);margin-left:6px;}
+  .status-dot.ok{background:var(--teal);}
+  .status-dot.bad{background:var(--red);}
+  .test-row{display:flex;align-items:center;gap:8px;margin-top:12px;font-family:var(--mono);font-size:12px;color:var(--muted);}
+
+  footer{text-align:center;margin-top:22px;font-size:11px;color:var(--muted-2);font-family:var(--mono);}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="brand">
+    <div class="brand-mark">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#05070a" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="17 1 21 5 17 9"></polyline>
+        <path d="M3 11V9a4 4 0 0 1 4-4h14"></path>
+        <polyline points="7 23 3 19 7 15"></polyline>
+        <path d="M21 13v2a4 4 0 0 1-4 4H3"></path>
+      </svg>
+    </div>
+    <div>
+      <h1>Proxy Downloader</h1>
+      <p class="sub">מוריד עבורך דרך <b>GitHub Actions</b> — לא דרך המחשב שלך</p>
+    </div>
+  </div>
+
+  <div class="relay" id="relay">
+    <div class="relay-nodes">
+      <div class="relay-line"></div>
+      <div class="relay-line-fill" id="relayFill"></div>
+      <div class="node" id="node1"><div class="dot">1</div><div class="node-label">שליחת<br>בקשה</div></div>
+      <div class="node" id="node2"><div class="dot">2</div><div class="node-label">ריצה ב-<br>Actions</div></div>
+      <div class="node" id="node3"><div class="dot">3</div><div class="node-label">משיכת<br>Artifact</div></div>
+      <div class="node" id="node4"><div class="dot">4</div><div class="node-label">שמירה<br>בדפדפן</div></div>
+    </div>
+    <div class="log-line" id="logLine"><span>ממתין לפעולה</span><span class="cursor"></span></div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="video">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
+      וידאו
+    </button>
+    <button class="tab-btn" data-tab="file">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+      קובץ
+    </button>
+    <button class="tab-btn" data-tab="settings">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+      הגדרות
+    </button>
+  </div>
+
+  <!-- VIDEO TAB -->
+  <div class="panel" id="panel-video">
+    <div class="field">
+      <label>קישור לוידאו (YouTube / Facebook / Instagram / TikTok...)</label>
+      <input type="url" id="videoUrl" placeholder="https://www.youtube.com/watch?v=...">
+    </div>
+    <div class="field">
+      <label>איכות</label>
+      <div class="quality-grid">
+        <div class="qbtn sel" data-q="best">מקס׳</div>
+        <div class="qbtn" data-q="1080">1080p</div>
+        <div class="qbtn" data-q="720">720p</div>
+        <div class="qbtn" data-q="480">480p</div>
+        <div class="qbtn" data-q="audio">MP3</div>
+      </div>
+    </div>
+    <button class="go-btn" id="goVideo"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"></polygon></svg> הורד וידאו</button>
+    <p class="hint">עובר תמיד דרך yt-dlp על ה-runner. תוכן שדורש חשבון מחובר ידרוש secret בשם <code>YT_COOKIES</code> בריפו.</p>
+  </div>
+
+  <!-- FILE TAB -->
+  <div class="panel" id="panel-file" style="display:none;">
+    <div class="field">
+      <label>קישור ישיר לקובץ (zip / pdf / exe וכו')</label>
+      <input type="url" id="fileUrl" placeholder="https://example.com/archive.zip">
+    </div>
+    <button class="go-btn" id="goFile"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"></polygon></svg> הורד קובץ</button>
+    <p class="hint">עובר תמיד דרך curl בלבד — לא נוגע ב-yt-dlp. שם הקובץ המקורי נשמר.</p>
+  </div>
+
+  <!-- SETTINGS TAB -->
+  <div class="panel" id="panel-settings" style="display:none;">
+    <div class="field">
+      <label>GitHub Owner (משתמש / ארגון)</label>
+      <input type="text" id="stOwner" placeholder="my-username">
+    </div>
+    <div class="field">
+      <label>שם הריפו</label>
+      <input type="text" id="stRepo" placeholder="proxy-downloader">
+    </div>
+    <div class="field">
+      <label>GitHub Token (repo scope, נשמר רק בדפדפן שלך)</label>
+      <input type="password" id="stToken" placeholder="ghp_...">
+    </div>
+    <button class="save-btn" id="saveSettings"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg> שמור הגדרות</button>
+    <button class="save-btn" id="testSettings"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"></path><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"></path><line x1="6" y1="1" x2="6" y2="4"></line><line x1="10" y1="1" x2="10" y2="4"></line><line x1="14" y1="1" x2="14" y2="4"></line></svg> בדיקת חיבור</button>
+    <div class="test-row" id="testRow" style="display:none;">
+      <span class="status-dot" id="testDot"></span>
+      <span id="testText"></span>
+    </div>
+    <p class="hint">
+      מומלץ Fine-grained token מוגבל לריפו הזה בלבד, עם הרשאות <code>Contents: Read and write</code> ו-<code>Actions: Read</code>.
+      אפשר גם Classic PAT עם הרשאת <code>repo</code>.
+      שום דבר לא נשלח לשום מקום מלבד api.github.com — הכל נשמר ב-localStorage אצלך בלבד.
+    </p>
+  </div>
+
+  <footer>proxy-downloader · הריצה בפועל מתבצעת על runner של GitHub, לא אצלך</footer>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+
+/* ---------- tabs ---------- */
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    ['video','file','settings'].forEach(t=>{
+      $('#panel-'+t).style.display = (t===btn.dataset.tab) ? 'block' : 'none';
+    });
+  });
+});
+
+/* ---------- quality selector ---------- */
+let selectedQuality = 'best';
+document.querySelectorAll('.qbtn').forEach(b=>{
+  b.addEventListener('click',()=>{
+    document.querySelectorAll('.qbtn').forEach(x=>x.classList.remove('sel'));
+    b.classList.add('sel');
+    selectedQuality = b.dataset.q;
+  });
+});
+
+/* ---------- settings persistence ---------- */
+function loadSettings(){
+  return {
+    owner: localStorage.getItem('pd_owner') || '',
+    repo: localStorage.getItem('pd_repo') || '',
+    token: localStorage.getItem('pd_token') || ''
+  };
+}
+function fillSettingsForm(){
+  const s = loadSettings();
+  $('#stOwner').value = s.owner;
+  $('#stRepo').value = s.repo;
+  $('#stToken').value = s.token;
+}
+fillSettingsForm();
+
+$('#saveSettings').addEventListener('click',()=>{
+  localStorage.setItem('pd_owner', $('#stOwner').value.trim());
+  localStorage.setItem('pd_repo', $('#stRepo').value.trim());
+  localStorage.setItem('pd_token', $('#stToken').value.trim());
+  $('#testRow').style.display='flex';
+  $('#testDot').className='status-dot ok';
+  $('#testText').textContent='ההגדרות נשמרו בדפדפן';
+});
+
+$('#testSettings').addEventListener('click', async ()=>{
+  const {owner, repo, token} = loadSettings();
+  $('#testRow').style.display='flex';
+  $('#testDot').className='status-dot';
+  $('#testText').textContent='בודק חיבור...';
+  if(!owner||!repo||!token){
+    $('#testDot').className='status-dot bad';
+    $('#testText').textContent='חסרים owner/repo/token';
+    return;
+  }
+  try{
+    const res = await fetch(`https://api.github.com/repos/${owner}/${repo}`,{
+      headers:{Authorization:`Bearer ${token}`, Accept:'application/vnd.github+json'}
+    });
+    if(res.ok){
+      $('#testDot').className='status-dot ok';
+      $('#testText').textContent='מחובר בהצלחה ל-'+owner+'/'+repo;
+    } else {
+      const j = await res.json().catch(()=>({}));
+      $('#testDot').className='status-dot bad';
+      $('#testText').textContent = 'שגיאה ('+res.status+'): '+(j.message||'לא ניתן להתחבר');
+    }
+  }catch(e){
+    $('#testDot').className='status-dot bad';
+    $('#testText').textContent='שגיאת רשת: '+e.message;
+  }
+});
+
+/* ---------- relay / progress UI ---------- */
+const nodeEls = [1,2,3,4].map(i=>$('#node'+i));
+function setStage(stage, state){
+  nodeEls.forEach((el,idx)=>{
+    const n = idx+1;
+    el.classList.remove('active','done','error');
+    if(n < stage) el.classList.add('done');
+    if(n === stage) el.classList.add(state);
+  });
+  const fillPct = state==='error' ? ((stage-1)/4)*100 : (state==='done' ? (stage/4)*100 : ((stage-0.5)/4)*100);
+  const scale = Math.max(0,Math.min(100,fillPct))/100;
+  $('#relayFill').style.transform = 'scaleX('+scale+')';
+}
+function resetStages(){
+  nodeEls.forEach(el=>el.classList.remove('active','done','error'));
+  $('#relayFill').style.transform = 'scaleX(0)';
+}
+function log(text, cls){
+  const el = $('#logLine');
+  el.className = 'log-line'+(cls?(' '+cls):'');
+  el.innerHTML = '';
+  if(cls==='ok'){
+    el.insertAdjacentHTML('beforeend','<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>');
+  } else if(cls==='err'){
+    el.insertAdjacentHTML('beforeend','<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>');
+  }
+  const span = document.createElement('span');
+  span.innerHTML = text;
+  el.appendChild(span);
+  if(!cls){
+    const c = document.createElement('span');
+    c.className='cursor';
+    el.appendChild(c);
+  }
+}
+
+const sleep = ms => new Promise(r=>setTimeout(r,ms));
+
+/* ---------- core flow ---------- */
+async function runDownload(mode){
+  const {owner, repo, token} = loadSettings();
+  let urlInput;
+  if(mode==='video') urlInput = $('#videoUrl').value.trim();
+  else urlInput = $('#fileUrl').value.trim();
+
+  const goBtn = mode==='video' ? $('#goVideo') : $('#goFile');
+
+  if(!owner || !repo || !token){
+    log('חסרות הגדרות GitHub — עברי/עבור לטאב "הגדרות" ומלאי/מלא owner/repo/token', 'err');
+    return;
+  }
+  if(!urlInput){
+    log('נא להזין קישור', 'err');
+    return;
+  }
+
+  goBtn.disabled = true;
+  resetStages();
+  const requestId = crypto.randomUUID();
+  let runId = null;
+
+  try{
+    setStage(1,'active');
+    log('שולח בקשת הורדה ל-GitHub...');
+
+    const dispatchRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/dispatches`,{
+      method:'POST',
+      headers:{
+        Authorization:`Bearer ${token}`,
+        Accept:'application/vnd.github+json',
+        'X-GitHub-Api-Version':'2022-11-28',
+        'Content-Type':'application/json'
+      },
+      body: JSON.stringify({
+        event_type:'download',
+        client_payload:{
+          request_id: requestId,
+          mode: mode,
+          url: urlInput,
+          quality: mode==='video' ? selectedQuality : undefined
+        }
+      })
+    });
+
+    if(dispatchRes.status !== 204){
+      const j = await dispatchRes.json().catch(()=>({}));
+      throw new Error('שליחת הבקשה נכשלה ('+dispatchRes.status+'): '+(j.message||'שגיאה לא ידועה'));
+    }
+
+    setStage(1,'done');
+    setStage(2,'active');
+    log('הבקשה נשלחה, מחפש את ה-run המתאים...');
+
+    runId = await findRun(owner, repo, token, requestId);
+    log('נמצא run #'+runId+', ממתין לסיום הריצה...');
+
+    const conclusion = await waitForRun(owner, repo, token, runId);
+    if(conclusion !== 'success'){
+      throw new Error('הריצה נכשלה (conclusion: '+conclusion+').');
+    }
+    setStage(2,'done');
+    setStage(3,'active');
+    log('הריצה הסתיימה בהצלחה, שולף artifact...');
+
+    const artifact = await getArtifact(owner, repo, token, runId);
+    setStage(3,'done');
+    setStage(4,'active');
+    log('הקובץ מוכן. בחר/י איך להוריד:');
+
+    const runUrl = `https://github.com/${owner}/${repo}/actions/runs/${runId}`;
+    const el = $('#logLine');
+    el.className = 'log-line';
+    el.innerHTML = '';
+
+    const line1 = document.createElement('div');
+    line1.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-left:5px;"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"></path></svg>מהיר יותר (צריך התחברות ל-GitHub): <a href="${runUrl}" target="_blank">פתח את דף הריצה</a>`;
+    el.appendChild(line1);
+
+    const manualBtn = document.createElement('button');
+    manualBtn.className = 'save-btn';
+    manualBtn.style.marginTop = '10px';
+    manualBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg> הורד עכשיו עם הטוקן`;
+    manualBtn.onclick = async () => {
+      manualBtn.disabled = true;
+      manualBtn.textContent = 'מוריד...';
+      try {
+        const zipBlob = await downloadArtifactZip(owner, repo, token, artifact.id);
+        // Very large files: unzipping in memory can crash the tab, so save the zip as-is.
+        if(zipBlob.size > 700*1024*1024){
+          const objUrl = URL.createObjectURL(zipBlob);
+          const a = document.createElement('a');
+          a.href = objUrl; a.download = 'download-'+runId+'.zip';
+          document.body.appendChild(a); a.click(); a.remove();
+          setTimeout(()=>URL.revokeObjectURL(objUrl), 60000);
+          manualBtn.innerHTML = '✓ ההורדה הופעלה (קובץ גדול — נשמר כ-zip)';
+          setStage(4,'done');
+          return;
+        }
+        const buf = new Uint8Array(await zipBlob.arrayBuffer());
+        const files = fflate.unzipSync(buf);
+        const entryNames = Object.keys(files).filter(k=>!k.endsWith('/'));
+        if(entryNames.length===0) throw new Error('הארכיון ריק');
+
+        for(const entryName of entryNames){
+          const data = files[entryName];
+          const outBlob = new Blob([data]);
+          const objUrl = URL.createObjectURL(outBlob);
+          const a = document.createElement('a');
+          a.href = objUrl;
+          a.download = entryName;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(()=>URL.revokeObjectURL(objUrl), 15000);
+          if(entryNames.length>1) await sleep(300);
+        }
+
+        manualBtn.innerHTML = '✓ ההורדה הופעלה';
+        setStage(4,'done');
+      } catch (err) {
+        manualBtn.textContent = 'שגיאה: '+err.message;
+        manualBtn.disabled = false;
+      }
+    };
+    el.appendChild(manualBtn);
+
+  }catch(err){
+    let stage = 1;
+    if(nodeEls[1].classList.contains('active')||nodeEls[1].classList.contains('done')) stage=2;
+    if(nodeEls[2].classList.contains('active')||nodeEls[2].classList.contains('done')) stage=3;
+    if(nodeEls[3].classList.contains('active')||nodeEls[3].classList.contains('done')) stage=4;
+    setStage(stage,'error');
+
+    if(runId){
+      const runUrl = `https://github.com/${owner}/${repo}/actions/runs/${runId}`;
+      log(err.message+' — <a href="'+runUrl+'" target="_blank">פתח את הריצה ב-Actions</a>', 'err');
+    } else {
+      log(err.message, 'err');
+    }
+  }finally{
+    goBtn.disabled = false;
+  }
+}
+
+async function findRun(owner, repo, token, requestId){
+  const target = 'dl-'+requestId;
+  const headers = {Authorization:`Bearer ${token}`, Accept:'application/vnd.github+json', 'X-GitHub-Api-Version':'2022-11-28'};
+  for(let i=0;i<30;i++){
+    const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/actions/runs?event=repository_dispatch&per_page=15`,{headers});
+    if(res.ok){
+      const j = await res.json();
+      const match = (j.workflow_runs||[]).find(r => r.display_title === target || r.name === target);
+      if(match) return match.id;
+    }
+    await sleep(2000);
+  }
+  throw new Error('לא נמצא run מתאים תוך 60 שניות. בדקי/בדוק ידנית בטאב Actions בריפו.');
+}
+
+async function waitForRun(owner, repo, token, runId){
+  const headers = {Authorization:`Bearer ${token}`, Accept:'application/vnd.github+json', 'X-GitHub-Api-Version':'2022-11-28'};
+  for(let i=0;i<1300;i++){ // ~2 hours, matches timeout-minutes in the workflow
+    const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/actions/runs/${runId}`,{headers});
+    if(!res.ok) throw new Error('שגיאה בבדיקת סטטוס הריצה ('+res.status+')');
+    const j = await res.json();
+    const statusLabel = {queued:'בתור', in_progress:'רצה כרגע', completed:'הושלמה'}[j.status] || j.status;
+    log('סטטוס ריצה: '+statusLabel+' ...');
+    if(j.status === 'completed') return j.conclusion;
+    await sleep(6000);
+  }
+  throw new Error('הריצה לא הסתיימה בזמן סביר');
+}
+
+async function getArtifact(owner, repo, token, runId){
+  const headers = {Authorization:`Bearer ${token}`, Accept:'application/vnd.github+json', 'X-GitHub-Api-Version':'2022-11-28'};
+  const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/actions/runs/${runId}/artifacts`,{headers});
+  if(!res.ok) throw new Error('לא ניתן לשלוף רשימת artifacts ('+res.status+')');
+  const j = await res.json();
+  const found = (j.artifacts||[])[0];
+  if(!found) throw new Error('לא נמצא artifact עבור הריצה הזו');
+  return found;
+}
+
+async function downloadArtifactZip(owner, repo, token, artifactId){
+  const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/actions/artifacts/${artifactId}/zip`,{
+    headers:{Authorization:`Bearer ${token}`, Accept:'application/vnd.github+json'}
+  });
+  if(!res.ok) throw new Error('הורדת ה-artifact נכשלה ('+res.status+')');
+  return await res.blob();
+}
+
+$('#goVideo').addEventListener('click', ()=>runDownload('video'));
+$('#goFile').addEventListener('click', ()=>runDownload('file'));
+</script>
+</body>
+</html>
