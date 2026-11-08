@@ -1,6 +1,7 @@
 # Proxy Downloader
 
-אתר שמריץ את ההורדה על שרת של GitHub Actions, לא על המחשב שלך. כשההורדה מסתיימת, הקובץ חוזר אליך לדפדפן.
+ה-backend של Proxy Downloader: ההורדה רצה על שרת של GitHub Actions, לא על המחשב שלך.
+הממשק (`index.html`) נשמר **רק במחשב שלך** ולא נמצא בריפו.
 
 ```
 index.html  ──repository_dispatch──▶  download.yml (yt-dlp / curl)  ──artifact──▶  index.html ▶ שמירה
@@ -10,20 +11,17 @@ index.html  ──repository_dispatch──▶  download.yml (yt-dlp / curl)  �
 
 | קובץ | תפקיד |
 |---|---|
-| `index.html` | הממשק: וידאו, קובץ והגדרות |
 | `.github/workflows/download.yml` | מקבל את הבקשה, מוריד עם yt-dlp (וידאו) או curl (קובץ) ומעלה artifact |
 | `.github/workflows/cleanup.yml` | פעם ביום מוחק ריצות ישנות, כדי שהאחסון לא יתמלא |
 
 ## הקמה (5 דקות)
 
-1. **יוצרים ריפו חדש** ב-GitHub (למשל `proxy-downloader`) ומעלים אליו את כל הקבצים, כולל התיקייה `.github`.
+1. **יוצרים ריפו חדש** ב-GitHub ומעלים אליו את התיקייה `.github`.
 2. **מוודאים ש-Actions פעיל:** Settings → Actions → General → Allow all actions.
 3. **יוצרים טוקן:** Settings (של החשבון) → Developer settings → Personal access tokens → **Fine-grained tokens** → Generate:
    - Repository access: רק הריפו הזה
    - Permissions: `Contents: Read and write` ו-`Actions: Read`
-4. **פותחים את `index.html`**, נכנסים לטאב "הגדרות", ממלאים owner, repo וטוקן, ולוחצים על "שמור" ואז על "בדיקת חיבור".
-5. **אופציונלי, כדי לגשת מכל מקום:** Settings → Pages → Deploy from branch → `main` / root. האתר יהיה זמין בכתובת
-   `https://<owner>.github.io/<repo>/`. (בריפו פרטי, Pages דורש מנוי בתשלום. אפשר גם פשוט לפתוח את `index.html` מקומית.)
+4. **פותחים את `index.html` מהמחשב** (לחיצה כפולה), נכנסים לטאב "הגדרות", ממלאים owner, repo וטוקן, ולוחצים על "שמור" ואז על "בדיקת חיבור". הטוקן נשמר רק בדפדפן שלך.
 
 ### תוכן שדורש התחברות (YouTube וכו')
 
