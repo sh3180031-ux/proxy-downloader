@@ -1,7 +1,7 @@
 // Drive relay for proxy-downloader.
 // GitHub asks for an upload URL for ONE file; this script opens it in the Drive folder below.
 // The Drive token never leaves Google.
-const FOLDER_NAME = 'הורדות'; // folder name in Drive
+const FOLDER_NAME = '\u05D4\u05D5\u05E8\u05D3\u05D5\u05EA'; // folder name in Drive
 
 function doGet(e) {
   const key = PropertiesService.getScriptProperties().getProperty('KEY');
