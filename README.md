@@ -15,10 +15,9 @@
 
 1. נכנסים ל-[script.new](https://script.new) (נפתח פרויקט Apps Script חדש).
 2. מוחקים את מה שכתוב ומדביקים את כל התוכן של [`drive-relay/Code.gs`](drive-relay/Code.gs).
-3. ⚙️ **Project Settings** → מסמנים **Show "appsscript.json" manifest file in editor**. חוזרים לעורך, פותחים את `appsscript.json` ומחליפים את התוכן שלו בתוכן של [`drive-relay/appsscript.json`](drive-relay/appsscript.json). שומרים (Ctrl+S).
-4. **Deploy → New deployment** → ⚙️ → **Web app**. מוודאים: *Execute as: Me*, *Who has access: Anyone*. לוחצים **Deploy** ומאשרים את ההרשאות (אם מופיע "Google hasn't verified this app": **Advanced → Go to ... (unsafe)**. זה הסקריפט שלך).
-5. בעורך בוחרים בפונקציה `setup` ולוחצים **Run**. ביומן (Execution log) מופיעה שורה שמתחילה ב-`https://script.google.com/...?key=`. מעתיקים אותה.
-6. ב-GitHub: **Settings → Secrets and variables → Actions → New repository secret**. שם: `DRIVE_LINK`, ערך: השורה שהעתקת. **Add secret**.
+3. **Deploy → New deployment** → ⚙️ → **Web app**. מוודאים: *Execute as: Me*, *Who has access: Anyone*. לוחצים **Deploy** ומאשרים את ההרשאות (אם מופיע "Google hasn't verified this app": **Advanced → Go to ... (unsafe)**. זה הסקריפט שלך).
+4. בעורך בוחרים בפונקציה `setup` ולוחצים **Run**. ביומן (Execution log) מופיעה שורה שמתחילה ב-`https://script.google.com/...?key=`. מעתיקים אותה.
+5. ב-GitHub: **Settings → Secrets and variables → Actions → New repository secret**. שם: `DRIVE_LINK`, ערך: השורה שהעתקת. **Add secret**.
 
 זהו. מעכשיו רק מדביקים קישורים.
 
