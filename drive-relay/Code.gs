@@ -1,7 +1,7 @@
-// גשר הורדות לדרייב.
-// השרת של GitHub מבקש "חלון העלאה" לקובץ אחד, והסקריפט פותח אותו בתיקייה "הורדות".
-// הטוקן של הדרייב לא יוצא מ-Google; GitHub מקבל רק כתובת העלאה חד-פעמית לקובץ אחד.
-const FOLDER_NAME = 'הורדות';  // שם התיקייה בדרייב
+// Drive relay for proxy-downloader.
+// GitHub asks for an upload URL for ONE file; this script opens it in the Drive folder below.
+// The Drive token never leaves Google.
+const FOLDER_NAME = 'הורדות'; // folder name in Drive
 
 function doGet(e) {
   const key = PropertiesService.getScriptProperties().getProperty('KEY');
@@ -18,7 +18,7 @@ function doGet(e) {
       contentType: 'application/json; charset=UTF-8',
       headers: headers,
       payload: JSON.stringify({ name: name, parents: [getFolder_().getId()] }),
-      muteHttpExceptions: true,
+      muteHttpExceptions: true
     });
   if (res.getResponseCode() !== 200) return json_({ error: res.getContentText() });
   const h = res.getAllHeaders();
@@ -35,7 +35,7 @@ function getFolder_() {
   return it.hasNext() ? it.next() : root.createFolder(FOLDER_NAME);
 }
 
-// מריצים פעם אחת אחרי הפריסה (Deploy). מייצר מפתח ומדפיס את הערך לסוד DRIVE_LINK ב-GitHub.
+// Run once after Deploy. Creates the key and prints the value for the GitHub secret DRIVE_LINK.
 function setup() {
   const props = PropertiesService.getScriptProperties();
   let key = props.getProperty('KEY');
@@ -46,9 +46,9 @@ function setup() {
   getFolder_();
   const url = ScriptApp.getService().getUrl();
   if (!url) {
-    Logger.log('קודם צריך לפרוס: Deploy ← New deployment ← Web app, ואז להריץ שוב את setup.');
+    Logger.log('Deploy first (Deploy > New deployment > Web app), then run setup again.');
     return;
   }
-  Logger.log('העתק את השורה הבאה לסוד בשם DRIVE_LINK ב-GitHub:');
+  Logger.log('Copy the next line into the GitHub secret DRIVE_LINK:');
   Logger.log(url.replace(/\/dev$/, '/exec') + '?key=' + key);
 }
