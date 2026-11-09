@@ -1,0 +1,114 @@
+name: לדרייב
+
+# מדביקים קישור -> השרת של GitHub מוריד -> הקובץ עולה לדרייב לתיקייה "הורדות".
+# דורש סוד אחד: DRIVE_LINK (ראו README).
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "קישור (אפשר כמה קישורים עם רווח ביניהם)"
+        required: true
+      audio:
+        description: "שמע בלבד (MP3)"
+        type: boolean
+        default: false
+  # להפעלה מבחוץ: POST /repos/{owner}/{repo}/dispatches  {"event_type":"drive","client_payload":{"url":"..."}}
+  repository_dispatch:
+    types: [drive]
+
+run-name: "לדרייב: ${{ inputs.url || github.event.client_payload.url }}"
+
+permissions:
+  contents: read
+
+jobs:
+  to-drive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      # קלט מהמשתמש עובר רק דרך משתני סביבה, אף פעם לא ישירות לתוך הסקריפט.
+      DL_URLS: ${{ inputs.url || github.event.client_payload.url }}
+      DL_AUDIO: ${{ inputs.audio || github.event.client_payload.audio || false }}
+      DRIVE_LINK: ${{ secrets.DRIVE_LINK }}
+      YT_COOKIES: ${{ secrets.YT_COOKIES }}
+    steps:
+      - name: בדיקה
+        run: |
+          set -euo pipefail
+          if [ -z "${DRIVE_LINK:-}" ]; then
+            echo "::error::חסר הסוד DRIVE_LINK. ראו את ההוראות ב-README (שלב ההקמה)."
+            exit 1
+          fi
+          read -ra urls <<< "$DL_URLS"
+          [ ${#urls[@]} -gt 0 ] || { echo "::error::לא הוזן קישור"; exit 1; }
+          for u in "${urls[@]}"; do
+            case "$u" in http://*|https://*|magnet:*) ;; *) echo "::error::קישור לא תקין: $u"; exit 1;; esac
+          done
+
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts
+
+      - name: התקנת כלים
+        run: |
+          set -euo pipefail
+          python3 -m pip install --upgrade --quiet "yt-dlp[default]" gdown requests
+          need=(); command -v aria2c >/dev/null || need+=(aria2); command -v ffmpeg >/dev/null || need+=(ffmpeg)
+          if [ ${#need[@]} -gt 0 ]; then sudo apt-get update -qq && sudo apt-get install -y -qq "${need[@]}"; fi
+          yt-dlp --version
+
+      - name: הורדה
+        run: |
+          set -euo pipefail
+          if [ -n "${YT_COOKIES:-}" ]; then
+            printf '%s\n' "$YT_COOKIES" > "$RUNNER_TEMP/cookies.txt"
+            export COOKIES_FILE="$RUNNER_TEMP/cookies.txt"
+          fi
+          flag=(); [ "$DL_AUDIO" = "true" ] && flag=(--audio)
+          read -ra urls <<< "$DL_URLS"
+          failed=0
+          for u in "${urls[@]}"; do
+            echo "::group::$u"
+            python3 scripts/fetch.py "$u" out "${flag[@]}" || failed=1
+            echo "::endgroup::"
+          done
+          rm -f "$RUNNER_TEMP/cookies.txt"
+          find out -type f ! -name '*.part' ! -name '*.ytdl' ! -name '*.aria2' | grep -q . \
+            || { echo "::error::לא הורד שום קובץ"; exit 1; }
+          [ "$failed" = 0 ] || echo "::warning::חלק מהקישורים נכשלו, ממשיך עם מה שהורד"
+
+      - name: העלאה לדרייב
+        run: |
+          set -euo pipefail
+          {
+            echo "### ✅ נשמר בדרייב (תיקייה: הורדות)"
+            echo
+            echo '| קובץ | גודל |'
+            echo '|---|---|'
+          } >> "$GITHUB_STEP_SUMMARY"
+          errors=0
+          while IFS= read -r -d '' f; do
+            name="$(basename -- "$f")"
+            size="$(stat -c %s -- "$f")"
+            echo "⬆️ $name ($(numfmt --to=iec "$size"))"
+            # מבקשים מהגשר כתובת העלאה לקובץ הזה בלבד.
+            resp="$(curl -sSL --fail-with-body -G "$DRIVE_LINK" \
+                      --data-urlencode "name=$name" --data-urlencode "size=$size")" || resp=""
+            upload_url="$(printf '%s' "$resp" | jq -r '.upload_url // empty' 2>/dev/null || true)"
+            if [ -z "$upload_url" ]; then
+              echo "::error::הגשר לדרייב לא החזיר כתובת העלאה: $(printf '%s' "$resp" | head -c 300)"
+              errors=1; continue
+            fi
+            echo "::add-mask::$upload_url"
+            code="$(curl -sS -o "$RUNNER_TEMP/up.json" -w '%{http_code}' --retry 3 \
+                      -X PUT -H "Content-Length: $size" --upload-file "$f" -- "$upload_url")" || code=000
+            if [ "$code" = 200 ] || [ "$code" = 201 ]; then
+              link="$(jq -r '.webViewLink // empty' "$RUNNER_TEMP/up.json")"
+              echo "✅ $name"
+              echo "| [${name//|/-}]($link) | $(numfmt --to=iec "$size") |" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "::error::העלאת $name נכשלה (HTTP $code): $(head -c 300 "$RUNNER_TEMP/up.json" 2>/dev/null)"
+              errors=1
+            fi
+          done < <(find out -type f ! -name '*.part' ! -name '*.ytdl' ! -name '*.aria2' -print0 | sort -z)
+          exit "$errors"

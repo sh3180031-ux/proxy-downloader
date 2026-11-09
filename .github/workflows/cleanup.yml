@@ -35,9 +35,11 @@ jobs:
         run: |
           set -euo pipefail
           cutoff="$(date -u -d '2 days ago' +%Y-%m-%dT%H:%M:%SZ)"
-          gh api --paginate "repos/$REPO/actions/workflows/download.yml/runs?per_page=100&status=completed" \
-            --jq ".workflow_runs[] | select(.created_at < \"$cutoff\") | .id" |
-          while read -r id; do
-            echo "deleting run $id"
-            gh api -X DELETE "repos/$REPO/actions/runs/$id" || true
+          for wf in download.yml drive.yml; do
+            gh api --paginate "repos/$REPO/actions/workflows/$wf/runs?per_page=100&status=completed" \
+              --jq ".workflow_runs[] | select(.created_at < \"$cutoff\") | .id" |
+            while read -r id; do
+              echo "deleting run $id"
+              gh api -X DELETE "repos/$REPO/actions/runs/$id" || true
+            done
           done

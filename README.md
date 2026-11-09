@@ -1,5 +1,33 @@
 # Proxy Downloader
 
+## ⬇️ לדרייב: מדביקים קישור והקובץ מגיע לדרייב
+
+ההורדה רצה על שרת של GitHub, והקובץ עולה ישר ל-Google Drive לתיקייה **הורדות**. לא צריך את `index.html` ולא צריך טוקן.
+
+**שימוש:** [Actions → לדרייב](../../actions/workflows/drive.yml) → **Run workflow** → מדביקים קישור → **Run workflow**.
+אחרי שהריצה מסתיימת, בדף הריצה יש קישור לכל קובץ בדרייב.
+
+מה נתמך: יוטיוב ואלפי אתרי וידאו (כולל פלייליסטים), קישורי Google Drive ציבוריים (קבצים ותיקיות), קבצים ישירים (EXE, ZIP, PDF...), magnet. אפשר כמה קישורים עם רווח ביניהם, וסימון "שמע בלבד" נותן MP3.
+
+### הקמה, פעם אחת בלבד
+
+הקוד נמצא בתיקייה [`drive-relay`](drive-relay). זה "גשר" קטן שרץ בחשבון ה-Google שלך ופותח לשרת של GitHub כתובת העלאה לקובץ אחד בכל פעם. הטוקן של הדרייב לא יוצא מ-Google.
+
+1. נכנסים ל-[script.new](https://script.new) (נפתח פרויקט Apps Script חדש).
+2. מוחקים את מה שכתוב ומדביקים את כל התוכן של [`drive-relay/Code.gs`](drive-relay/Code.gs).
+3. ⚙️ **Project Settings** → מסמנים **Show "appsscript.json" manifest file in editor**. חוזרים לעורך, פותחים את `appsscript.json` ומחליפים את התוכן שלו בתוכן של [`drive-relay/appsscript.json`](drive-relay/appsscript.json). שומרים (Ctrl+S).
+4. **Deploy → New deployment** → ⚙️ → **Web app**. מוודאים: *Execute as: Me*, *Who has access: Anyone*. לוחצים **Deploy** ומאשרים את ההרשאות (אם מופיע "Google hasn't verified this app": **Advanced → Go to ... (unsafe)**. זה הסקריפט שלך).
+5. בעורך בוחרים בפונקציה `setup` ולוחצים **Run**. ביומן (Execution log) מופיעה שורה שמתחילה ב-`https://script.google.com/...?key=`. מעתיקים אותה.
+6. ב-GitHub: **Settings → Secrets and variables → Actions → New repository secret**. שם: `DRIVE_LINK`, ערך: השורה שהעתקת. **Add secret**.
+
+זהו. מעכשיו רק מדביקים קישורים.
+
+> הכתובת עם `?key=` מאפשרת להעלות קבצים לתיקייה "הורדות" בדרייב שלך, לכן שומרים אותה **רק** בסוד ב-GitHub. אם היא דלפה: מוחקים ב-Apps Script את המאפיין `KEY` (Project Settings → Script properties), מריצים שוב `setup` ומעדכנים את הסוד.
+
+---
+
+## ההורדה הרגילה (דרך index.html)
+
 ה-backend של Proxy Downloader: ההורדה רצה על שרת של GitHub Actions, לא על המחשב שלך.
 הממשק (`index.html`) נשמר **רק במחשב שלך** ולא נמצא בריפו.
 
@@ -12,6 +40,9 @@ index.html  ──repository_dispatch──▶  download.yml (yt-dlp / curl)  �
 | קובץ | תפקיד |
 |---|---|
 | `.github/workflows/download.yml` | מקבל את הבקשה, מוריד עם yt-dlp (וידאו) או curl (קובץ) ומעלה artifact |
+| `.github/workflows/drive.yml` | **לדרייב**: מוריד (זיהוי אוטומטי) ומעלה לדרייב |
+| `scripts/fetch.py` | ההורדה עצמה: yt-dlp / gdown / aria2 |
+| `drive-relay/` | הגשר לדרייב (Google Apps Script) |
 | `.github/workflows/cleanup.yml` | פעם ביום מוחק ריצות ישנות, כדי שהאחסון לא יתמלא |
 
 ## הקמה (5 דקות)
